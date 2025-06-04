@@ -57,7 +57,6 @@ io.on('connection', (socket) => {
         tiktokConnectionWrapper.once('connected', state => socket.emit('tiktokConnected', state));
         tiktokConnectionWrapper.once('disconnected', reason => socket.emit('tiktokDisconnected', reason));
 
-        // Notify client when stream ends
         tiktokConnectionWrapper.connection.on('streamEnd', () => socket.emit('streamEnd'));
 
         // Redirect message events
@@ -74,6 +73,13 @@ io.on('connection', (socket) => {
         tiktokConnectionWrapper.connection.on('emote', msg => socket.emit('emote', msg));
         tiktokConnectionWrapper.connection.on('envelope', msg => socket.emit('envelope', msg));
         tiktokConnectionWrapper.connection.on('subscribe', msg => socket.emit('subscribe', msg));
+
+
+        // Add onAny handler to log all events
+        tiktokConnectionWrapper.connection.on('any', (eventName, msg) => {
+            console.log(`Event '${eventName}' received:`, msg);
+            socket.emit('any', { type: eventName, data: msg });
+        });
     });
 
     socket.on('disconnect', () => {

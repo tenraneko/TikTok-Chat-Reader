@@ -37,6 +37,26 @@ class TikTokConnectionWrapper extends EventEmitter {
             this.log(`Error event triggered: ${err.info}, ${err.exception}`);
             console.error(err);
         })
+
+        // Setup event forwarding for the 'any' event
+        this.setupEventForwarding();
+    }
+
+    setupEventForwarding() {
+        // Store the original emit function
+        const originalEmit = this.connection.emit;
+
+        // Override the emit function to also emit an 'any' event with the event name and data
+        this.connection.emit = function(eventName, ...args) {
+            // Call the original emit function to maintain normal functionality
+            originalEmit.apply(this, [eventName, ...args]);
+
+            // Don't forward internal events that start with underscore
+            if (eventName !== 'newListener' && eventName !== 'removeListener' && !eventName.startsWith('_')) {
+                // Emit a special 'any' event with the original event name and its arguments
+                originalEmit.apply(this, ['any', eventName, ...args]);
+            }
+        };
     }
 
     connect(isReconnect) {
