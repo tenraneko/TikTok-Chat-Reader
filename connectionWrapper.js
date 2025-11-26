@@ -73,7 +73,7 @@ class TikTokConnectionWrapper extends EventEmitter {
 
     connect(isReconnect) {
         this.connection.connect().then((state) => {
-            this.log(`${isReconnect ? 'Reconnected' : 'Connected'} to roomId ${state.roomId}, websocket: ${state.upgradedToWebsocket}`);
+            this.log(`${isReconnect ? 'Reconnected' : 'Connected'} to roomId ${state.roomId}`);
 
             globalConnectionCount += 1;
 
