@@ -5,9 +5,13 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { TikTokConnectionWrapper, getGlobalConnectionCount } = require('./connectionWrapper');
 const { clientBlocked } = require('./limiter');
+const { WebcastPushConnection } = require('tiktok-live-connector');
 
 const app = express();
 const httpServer = createServer(app);
+
+// Enable JSON body parsing
+app.use(express.json());
 
 // Enable cross origin resource sharing
 const io = new Server(httpServer, {
@@ -94,6 +98,38 @@ io.on('connection', (socket) => {
 setInterval(() => {
     io.emit('statistic', { globalConnectionCount: getGlobalConnectionCount() });
 }, 5000)
+
+// API endpoint to check if user is live
+app.get('/api/islive/:username', async (req, res) => {
+    const username = req.params.username;
+
+    if (!username) {
+        return res.status(400).json({ error: 'Username is required' });
+    }
+
+    try {
+        const options = {};
+        
+        // Use session ID if available
+        if (process.env.SESSIONID) {
+            options.sessionId = process.env.SESSIONID;
+        }
+
+        const connection = new WebcastPushConnection(username, options);
+        const isLive = await connection.fetchIsLive();
+        
+        res.json({ 
+            username: username,
+            isLive: isLive 
+        });
+    } catch (err) {
+        console.error(`Error checking live status for ${username}:`, err);
+        res.status(500).json({ 
+            error: 'Failed to check live status',
+            message: err.message 
+        });
+    }
+});
 
 // Serve frontend files
 app.use(express.static('public'));
