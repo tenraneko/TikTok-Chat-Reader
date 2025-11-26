@@ -36,6 +36,10 @@ class TikTokConnectionWrapper extends EventEmitter {
         this.connection.on('error', (err) => {
             this.log(`Error event triggered: ${err.info}, ${err.exception}`);
             console.error(err);
+
+            if (err.exception && err.exception.toString().includes("liveRoomUserInfo")) {
+                this.log("Failed to scrape room info. This is often caused by TikTok blocking the request. Please try adding a SESSIONID to your .env file.");
+            }
         })
 
         // Setup event forwarding for the 'any' event
@@ -53,8 +57,16 @@ class TikTokConnectionWrapper extends EventEmitter {
 
             // Don't forward internal events that start with underscore
             if (eventName !== 'newListener' && eventName !== 'removeListener' && !eventName.startsWith('_')) {
+                
+                let eventArgs = args;
+
+                // Avoid forwarding complex objects for 'websocketConnected'
+                if (eventName === 'websocketConnected') {
+                    eventArgs = ['[TikTokWsClient]'];
+                }
+
                 // Emit a special 'any' event with the original event name and its arguments
-                originalEmit.apply(this, ['any', eventName, ...args]);
+                originalEmit.apply(this, ['any', eventName, ...eventArgs]);
             }
         };
     }
@@ -125,7 +137,7 @@ class TikTokConnectionWrapper extends EventEmitter {
         this.clientDisconnected = true;
         this.reconnectEnabled = false;
 
-        if (this.connection.getState().isConnected) {
+        if (this.connection.state.isConnected) {
             this.connection.disconnect();
         }
     }

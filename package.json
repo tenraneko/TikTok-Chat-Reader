@@ -4,9 +4,9 @@
     "npm": "10.9.2"
   },
   "dependencies": {
-    "dotenv": "^16.0.0",
-    "express": "^4.17.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
     "socket.io": "^4.4.1",
-    "tiktok-live-connector": "^1.2.3"
+    "tiktok-live-connector": "^2.1.0"
   }
 }
