@@ -7,6 +7,14 @@ const { TikTokConnectionWrapper, getGlobalConnectionCount } = require('./connect
 const { clientBlocked } = require('./limiter');
 const { WebcastPushConnection } = require('tiktok-live-connector');
 
+function normalizeUniqueId(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim().replace(/^@+/, "");
+}
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -27,6 +35,11 @@ io.on('connection', (socket) => {
     console.info('New connection from origin', socket.handshake.headers['origin'] || socket.handshake.headers['referer']);
 
     socket.on('setUniqueId', (uniqueId, options) => {
+            const normalizedUniqueId = normalizeUniqueId(uniqueId);
+    if (!normalizedUniqueId) {
+      socket.emit("tiktokDisconnected", "Invalid TikTok username");
+      return;
+    }
 
         // Prohibit the client from specifying these options (for security reasons)
         if (typeof options === 'object' && options) {
@@ -50,7 +63,7 @@ io.on('connection', (socket) => {
 
         // Connect to the given username (uniqueId)
         try {
-            tiktokConnectionWrapper = new TikTokConnectionWrapper(uniqueId, options, true);
+            tiktokConnectionWrapper = new TikTokConnectionWrapper(normalizedUniqueId, options, true);
             tiktokConnectionWrapper.connect();
         } catch (err) {
             socket.emit('tiktokDisconnected', err.toString());
@@ -101,7 +114,7 @@ setInterval(() => {
 
 // API endpoint to check if user is live
 app.get('/api/islive/:username', async (req, res) => {
-    const username = req.params.username;
+    const username = normalizeUniqueId(req.params.username);
 
     if (!username) {
         return res.status(400).json({ error: 'Username is required' });
