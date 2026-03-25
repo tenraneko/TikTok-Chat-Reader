@@ -3,8 +3,9 @@ require('dotenv').config();
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const { TikTokConnectionWrapper, getGlobalConnectionCount, getUniqueIdBlockInfo } = require("./connectionWrapper");
+const { TikTokConnectionWrapper, getGlobalConnectionCount } = require('./connectionWrapper');
 const { clientBlocked } = require('./limiter');
+const { WebcastPushConnection } = require('tiktok-live-connector');
 
 function normalizeUniqueId(value) {
   if (typeof value !== "string") {
@@ -22,70 +23,60 @@ app.use(express.json());
 
 // Enable cross origin resource sharing
 const io = new Server(httpServer, {
-  cors: {
+    cors: {
         origin: '*'
     }
 });
 
 
 io.on('connection', (socket) => {
-  let tiktokConnectionWrapper;
+    let tiktokConnectionWrapper;
 
     console.info('New connection from origin', socket.handshake.headers['origin'] || socket.handshake.headers['referer']);
 
-  socket.on("setUniqueId", async (uniqueId, options) => {
-    const normalizedUniqueId = normalizeUniqueId(uniqueId);
+    socket.on('setUniqueId', (uniqueId, options) => {
+            const normalizedUniqueId = normalizeUniqueId(uniqueId);
     if (!normalizedUniqueId) {
       socket.emit("tiktokDisconnected", "Invalid TikTok username");
       return;
     }
 
-    // Prohibit the client from specifying these options (for security reasons)
+        // Prohibit the client from specifying these options (for security reasons)
         if (typeof options === 'object' && options) {
-      delete options.requestOptions;
-      delete options.websocketOptions;
-    } else {
-      options = {};
-    }
+            delete options.requestOptions;
+            delete options.websocketOptions;
+        } else {
+            options = {};
+        }
 
-    // Session ID in .env file is optional
-    if (process.env.SESSIONID) {
-      options.sessionId = process.env.SESSIONID;
+        // Session ID in .env file is optional
+        if (process.env.SESSIONID) {
+            options.sessionId = process.env.SESSIONID;
             console.info('Using SessionId');
-    }
+        }
 
-    // Check if rate limit exceeded
-    if (process.env.ENABLE_RATE_LIMIT && clientBlocked(io, socket)) {
-      socket.emit(
-        "tiktokDisconnected",
-        "You have opened too many connections or made too many connection requests. Please reduce the number of connections/requests or host your own server instance. The connections are limited to avoid that the server IP gets blocked by TokTok.",
-      );
-      return;
-    }
+        // Check if rate limit exceeded
+        if (process.env.ENABLE_RATE_LIMIT && clientBlocked(io, socket)) {
+            socket.emit('tiktokDisconnected', 'You have opened too many connections or made too many connection requests. Please reduce the number of connections/requests or host your own server instance. The connections are limited to avoid that the server IP gets blocked by TokTok.');
+            return;
+        }
 
-    const blockInfo = getUniqueIdBlockInfo(normalizedUniqueId);
-    if (blockInfo.isBlocked) {
-      const remainingMinutes = Math.ceil(blockInfo.remainingMs / (60 * 1000));
-      socket.emit("tiktokDisconnected", `Too many failed attempts for this user. Try again in ${remainingMinutes} minute(s).`);
-      return;
-    }
-
-    // Connect to the given username (uniqueId)
-    try {
+        // Connect to the given username (uniqueId)
+        try {
             tiktokConnectionWrapper = new TikTokConnectionWrapper(normalizedUniqueId, options, true);
-      tiktokConnectionWrapper.connect();
-    } catch (err) {
+            tiktokConnectionWrapper.connect();
+        } catch (err) {
             socket.emit('tiktokDisconnected', err.toString());
-      return;
-    }
+            return;
+        }
 
-    // Redirect wrapper control events once
+        // Redirect wrapper control events once
         tiktokConnectionWrapper.once('connected', state => socket.emit('tiktokConnected', state));
         tiktokConnectionWrapper.once('disconnected', reason => socket.emit('tiktokDisconnected', reason));
 
         tiktokConnectionWrapper.connection.on('streamEnd', () => socket.emit('streamEnd'));
 
-    // Redirect message events
+        // Redirect message events
         tiktokConnectionWrapper.connection.on('roomUser', msg => socket.emit('roomUser', msg));
         tiktokConnectionWrapper.connection.on('member', msg => socket.emit('member', msg));
         tiktokConnectionWrapper.connection.on('chat', msg => socket.emit('chat', msg));
@@ -102,18 +93,18 @@ io.on('connection', (socket) => {
         tiktokConnectionWrapper.connection.on('social', msg => socket.emit('social', msg));
 
 
-    // Add onAny handler to log all events
-    // tiktokConnectionWrapper.connection.on('any', (eventName, msg) => {
-    // console.log(`Event '${eventName}' received:`, msg);
-    // socket.emit('any', { type: eventName, data: msg });
-    // });
-  });
+        // Add onAny handler to log all events
+        // tiktokConnectionWrapper.connection.on('any', (eventName, msg) => {
+            // console.log(`Event '${eventName}' received:`, msg);
+            // socket.emit('any', { type: eventName, data: msg });
+        // });
+    });
 
     socket.on('disconnect', () => {
-    if (tiktokConnectionWrapper) {
-      tiktokConnectionWrapper.disconnect();
-    }
-  });
+        if (tiktokConnectionWrapper) {
+            tiktokConnectionWrapper.disconnect();
+        }
+    });
 });
 
 // Emit global connection statistics
@@ -121,37 +112,36 @@ setInterval(() => {
     io.emit('statistic', { globalConnectionCount: getGlobalConnectionCount() });
 }, 5000)
 
-// API endpoint to check if user is live
-// app.get("/api/islive/:username", async (req, res) => {
-//   const username = normalizeUniqueId(req.params.username);
+// // API endpoint to check if user is live
+// app.get('/api/islive/:username', async (req, res) => {
+//     const username = normalizeUniqueId(req.params.username);
 
-//   if (!username) {
-//     return res.status(400).json({ error: "Username is required" });
-//   }
-
-//   try {
-//     const options = {};
-//     const { TikTokLiveConnection } = await getTikTokConnectorModule();
-
-//     // Use session ID if available
-//     if (process.env.SESSIONID) {
-//       options.sessionId = process.env.SESSIONID;
+//     if (!username) {
+//         return res.status(400).json({ error: 'Username is required' });
 //     }
 
-//     const connection = new TikTokLiveConnection(username, options);
-//     const isLive = await connection.fetchIsLive();
+//     try {
+//         const options = {};
+        
+//         // Use session ID if available
+//         if (process.env.SESSIONID) {
+//             options.sessionId = process.env.SESSIONID;
+//         }
 
-//     res.json({
-//       username: username,
-//       isLive: isLive,
-//     });
-//   } catch (err) {
-//     console.error(`Error checking live status for ${username}:`, err);
-//     res.status(500).json({
-//       error: "Failed to check live status",
-//       message: err.message,
-//     });
-//   }
+//         const connection = new WebcastPushConnection(username, options);
+//         const isLive = await connection.fetchIsLive();
+        
+//         res.json({ 
+//             username: username,
+//             isLive: isLive 
+//         });
+//     } catch (err) {
+//         console.error(`Error checking live status for ${username}:`, err);
+//         res.status(500).json({ 
+//             error: 'Failed to check live status',
+//             message: err.message 
+//         });
+//     }
 // });
 
 // Serve frontend files
