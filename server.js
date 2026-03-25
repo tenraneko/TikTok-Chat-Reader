@@ -4,7 +4,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { TikTokConnectionWrapper, getGlobalConnectionCount } = require('./connectionWrapper');
-const { clientBlocked } = require('./limiter');
+const { clientBlocked, recordFailedAttempt, resetFailedAttempts, getSocketIp } = require('./limiter');
 const { WebcastPushConnection } = require('tiktok-live-connector');
 
 function normalizeUniqueId(value) {
@@ -31,6 +31,7 @@ const io = new Server(httpServer, {
 
 io.on('connection', (socket) => {
     let tiktokConnectionWrapper;
+    const clientIp = getSocketIp(socket);
 
     console.info('New connection from origin', socket.handshake.headers['origin'] || socket.handshake.headers['referer']);
 
@@ -66,13 +67,20 @@ io.on('connection', (socket) => {
             tiktokConnectionWrapper = new TikTokConnectionWrapper(normalizedUniqueId, options, true);
             tiktokConnectionWrapper.connect();
         } catch (err) {
+            recordFailedAttempt(clientIp);
             socket.emit('tiktokDisconnected', err.toString());
             return;
         }
 
         // Redirect wrapper control events once
-        tiktokConnectionWrapper.once('connected', state => socket.emit('tiktokConnected', state));
-        tiktokConnectionWrapper.once('disconnected', reason => socket.emit('tiktokDisconnected', reason));
+        tiktokConnectionWrapper.once('connected', state => {
+            resetFailedAttempts(clientIp);
+            socket.emit('tiktokConnected', state);
+        });
+        tiktokConnectionWrapper.once('disconnected', reason => {
+            recordFailedAttempt(clientIp);
+            socket.emit('tiktokDisconnected', reason);
+        });
 
         tiktokConnectionWrapper.connection.on('streamEnd', () => socket.emit('streamEnd'));
 
