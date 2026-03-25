@@ -1,11 +1,10 @@
-require("dotenv").config();
+require('dotenv').config();
 
-const express = require("express");
-const { createServer } = require("http");
-const { Server } = require("socket.io");
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 const { TikTokConnectionWrapper, getGlobalConnectionCount, getUniqueIdBlockInfo } = require("./connectionWrapper");
-const { getTikTokConnectorModule } = require("./tiktokConnector");
-const { clientBlocked } = require("./limiter");
+const { clientBlocked } = require('./limiter');
 
 function normalizeUniqueId(value) {
   if (typeof value !== "string") {
@@ -24,14 +23,15 @@ app.use(express.json());
 // Enable cross origin resource sharing
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
-  },
+        origin: '*'
+    }
 });
 
-io.on("connection", (socket) => {
+
+io.on('connection', (socket) => {
   let tiktokConnectionWrapper;
 
-  console.info("New connection from origin", socket.handshake.headers["origin"] || socket.handshake.headers["referer"]);
+    console.info('New connection from origin', socket.handshake.headers['origin'] || socket.handshake.headers['referer']);
 
   socket.on("setUniqueId", async (uniqueId, options) => {
     const normalizedUniqueId = normalizeUniqueId(uniqueId);
@@ -41,11 +41,9 @@ io.on("connection", (socket) => {
     }
 
     // Prohibit the client from specifying these options (for security reasons)
-    if (typeof options === "object" && options) {
+        if (typeof options === 'object' && options) {
       delete options.requestOptions;
       delete options.websocketOptions;
-      delete options.webClientOptions;
-      delete options.wsClientOptions;
     } else {
       options = {};
     }
@@ -53,7 +51,7 @@ io.on("connection", (socket) => {
     // Session ID in .env file is optional
     if (process.env.SESSIONID) {
       options.sessionId = process.env.SESSIONID;
-      console.info("Using SessionId");
+            console.info('Using SessionId');
     }
 
     // Check if rate limit exceeded
@@ -74,15 +72,10 @@ io.on("connection", (socket) => {
 
     // Connect to the given username (uniqueId)
     try {
-      const { TikTokLiveConnection, WebcastEvent, ControlEvent } = await getTikTokConnectorModule();
-      tiktokConnectionWrapper = new TikTokConnectionWrapper(normalizedUniqueId, options, true, {
-        TikTokLiveConnection,
-        WebcastEvent,
-        ControlEvent,
-      });
+            tiktokConnectionWrapper = new TikTokConnectionWrapper(normalizedUniqueId, options, true);
       tiktokConnectionWrapper.connect();
     } catch (err) {
-      socket.emit("tiktokDisconnected", err.toString());
+            socket.emit('tiktokDisconnected', err.toString());
       return;
     }
 
@@ -116,7 +109,7 @@ io.on("connection", (socket) => {
     // });
   });
 
-  socket.on("disconnect", () => {
+    socket.on('disconnect', () => {
     if (tiktokConnectionWrapper) {
       tiktokConnectionWrapper.disconnect();
     }
@@ -125,8 +118,8 @@ io.on("connection", (socket) => {
 
 // Emit global connection statistics
 setInterval(() => {
-  io.emit("statistic", { globalConnectionCount: getGlobalConnectionCount() });
-}, 5000);
+    io.emit('statistic', { globalConnectionCount: getGlobalConnectionCount() });
+}, 5000)
 
 // API endpoint to check if user is live
 // app.get("/api/islive/:username", async (req, res) => {
@@ -162,7 +155,7 @@ setInterval(() => {
 // });
 
 // Serve frontend files
-app.use(express.static("public"));
+app.use(express.static('public'));
 
 // Start http listener
 const port = process.env.PORT || 8081;
